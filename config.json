@@ -2,16 +2,19 @@
   "host": {
     "title": "Host",
     "type": "string",
-    "default": "http://watch.beastiptv.tv/"
+    "default": "http://watch.beastiptv.tv/",
+    "required": true
   },
   "username": {
     "title": "Username",
     "type": "string",
-    "default": ""
+    "default": "",
+    "required": true
   },
   "password": {
     "title": "Password",
     "type": "string",
-    "default": ""
+    "default": "",
+    "required": true
   }
 }
