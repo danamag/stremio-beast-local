@@ -1,4 +1,9 @@
-const modules = require('./modules')
+const pUrl = require('url')
+
+const { config, persist } = require('internal')
+
+const needle = require('needle')
+const cheerio = require('cheerio')
 
 const defaults = {
 	name: 'Beast IPTV',
@@ -30,7 +35,7 @@ function setEndpoint(str) {
 		if (!host.endsWith('/'))
 			host += '/'
 		endpoint = host
-		origin = !modules.get.url ? defaults.origin : endpoint.replace(modules.get.url.parse(endpoint).path, '')
+		origin = endpoint.replace(pUrl.parse(endpoint).path, '')
 		ajaxEndpoint = endpoint + 'includes/ajax-control.php'
 		headers['Origin'] = origin
 		headers['Referer'] = endpoint + 'index.php'
@@ -38,7 +43,7 @@ function setEndpoint(str) {
 	return true
 }
 
-setEndpoint(defaults.endpoint)
+setEndpoint(config.host || defaults.endpoint)
 
 function setCatalogs(cats) {
 	categories = cats
@@ -61,7 +66,7 @@ let loggedIn = false
 // not using logout anywhere yet
 function logout(cb) {
 	const payload = 'action=logoutProcess'
-	modules.get.needle.post(ajaxEndpoint, payload, { headers, cookies }, (err, resp, body) => {
+	needle.post(ajaxEndpoint, payload, { headers, cookies }, (err, resp, body) => {
 		if (!err) {
 			loggedIn = false
 			cookies = undefined
@@ -71,15 +76,13 @@ function logout(cb) {
 	})
 }
 
-function isLogedIn(local, cb) {
+function isLogedIn(cb) {
 	if (loggedIn)
 		return cb(true)
-	const config = local.config
-	setEndpoint(config.host)
 	const payload = 'action=webtvlogin&uname='+config.username+'&upass='+config.password+'&rememberMe=off'
-	modules.get.needle.post(ajaxEndpoint, payload, { headers, cookies }, (err, resp, body) => {
-		cookies = resp.cookies
+	needle.post(ajaxEndpoint, payload, { headers, cookies }, (err, resp, body) => {
 		if (body) {
+			cookies = resp.cookies
 			if (typeof body == 'string') {
 				try {
 					body = JSON.parse(body)
@@ -91,6 +94,7 @@ function isLogedIn(local, cb) {
 			if (body.result == 'error') {
 				console.log(defaults.name + ' - Error')
 				console.error(body.message || 'Failed to log in')
+				cb()
 			} else if (body.result == 'success') {
 				const msg = (body.message || {})
 				if (msg.max_connections && msg.active_cons >= msg.max_connections) {
@@ -101,8 +105,8 @@ function isLogedIn(local, cb) {
 					// login success
 					loggedIn = true
 					console.log(defaults.name + ' - Logged In')
-					local.persist.loginData = msg
-					getCategories(local, success => {
+					persist.setItem('loginData', msg)
+					getCategories(success => {
 						if (success)
 							console.log(defaults.name + ' - Updated catalogs successfully')
 						else
@@ -124,8 +128,8 @@ function isLogedIn(local, cb) {
 	})
 }
 
-function request(local, url, payload, cb) {
-	isLogedIn(local, () => { modules.get.needle.post(url, payload, { headers, cookies }, cb) })
+function request(url, payload, cb) {
+	isLogedIn(() => { needle.post(url, payload, { headers, cookies }, cb) })
 }
 
 function findChannel(query, chans) {
@@ -150,16 +154,15 @@ function findMeta(id) {
 	return meta
 }
 
-function getCatalog(local, reqId, cb) {
+function getCatalog(reqId, cb) {
 	const id = reqId.replace(defaults.prefix + 'cat_', '')
 	if (channels[id] && channels[id].length)
 		cb(channels[id])
 	else {
-		const persist = local.persist
-		const payload = 'action=getStreamsFromID&categoryID=' + id + '&hostURL=' + encodeURIComponent('http://' + persist.loginData.url + ':' + persist.loginData.port + '/')
-		request(local, ajaxEndpoint, payload, (err, resp, body) => {
+		const payload = 'action=getStreamsFromID&categoryID=' + id + '&hostURL=' + encodeURIComponent('http://' + persist.getItem('loginData').url + ':' + persist.getItem('loginData').port + '/')
+		request(ajaxEndpoint, payload, (err, resp, body) => {
 			if (!err && body) {
-				const $ = modules.get.cheerio.load(body)
+				const $ = cheerio.load(body)
 				channels[id] = []
 
 				$('li.streamList').each((ij, el) => {
@@ -187,12 +190,12 @@ function addZero(deg) {
 	return ('0' + deg).slice(-2)
 }
 
-function getCategories(local, cb) {
+function getCategories(cb) {
 	const date = new Date()
 	const payload = 'dateFullData=' + (date.getDay() +1) + '-' + (date.getMonth() +1) + '-' + date.getFullYear() + '+' + encodeURIComponent(addZero(date.getHours()) + ":" + addZero(date.getMinutes()) + ":" + addZero(date.getSeconds()))
-	modules.get.needle.post(endpoint + 'live.php', payload, { headers, cookies }, (err, resp, body) => {
+	needle.post(endpoint + 'live.php', payload, { headers, cookies }, (err, resp, body) => {
 		if (!err && body) {
-			const $ = modules.get.cheerio.load(body)
+			const $ = cheerio.load(body)
 			const results = []
 			$('.cbp-spmenu li a').each((ij, el) => {
 				const elm = $(el)
@@ -208,66 +211,75 @@ function getCategories(local, cb) {
 	})
 }
 
-module.exports = {
-	manifest: local => {
-		modules.set(local.modules)
-		const config = local.config
-
-		function manifest() {
-			return {
-				id: 'org.' + defaults.name.toLowerCase().replace(/[^a-z]+/g,''),
-				version: '1.0.0',
-				name: defaults.name,
-				description: 'IPTV Service - Requires Subscription',
-				resources: ['stream', 'meta', 'catalog'],
-				types: ['tv'],
-				idPrefixes: [defaults.prefix],
-				icon: defaults.icon,
-				catalogs
-			}
+function retrieveManifest() {
+	function manifest() {
+		return {
+			id: 'org.' + defaults.name.toLowerCase().replace(/[^a-z]+/g,''),
+			version: '1.0.0',
+			name: defaults.name,
+			description: 'IPTV Service - Requires Subscription',
+			resources: ['stream', 'meta', 'catalog'],
+			types: ['tv'],
+			idPrefixes: [defaults.prefix],
+			icon: defaults.icon,
+			catalogs
 		}
+	}
 
+	return new Promise((resolve, reject) => {
+		isLogedIn(() => { resolve(manifest()) })
+	})
+}
+
+async function retrieveRouter() {
+	const manifest = await retrieveManifest()
+
+	const { addonBuilder, getInterface, getRouter } = require('stremio-addon-sdk')
+
+	const builder = new addonBuilder(manifest)
+
+	builder.defineCatalogHandler(args => {
 		return new Promise((resolve, reject) => {
-			isLogedIn(local, () => { resolve(manifest()) })
+			const extra = args.extra || {}
+			getCatalog(args.id, catalog => {
+				if (catalog) {
+					let results = catalog
+					if (extra.search)
+						results = findChannel(extra.search, catalog)
+					if (results.length)
+						resolve({ metas: results })
+					else
+						reject(defaults.name + ' - No results for catalog request')
+				} else
+					reject(defaults.name + ' - Invalid catalog response')
+			})
 		})
-	},
-	handler: (args, local) => {
-		modules.set(local.modules)
-		const persist = local.persist
-		const config = local.config
-		const extra = args.extra || {}
+	})
 
-	    if (!args.id)
-	        return Promise.reject(new Error(defaults.name + ' - No ID Specified'))
-
+	builder.defineMetaHandler(args => {
 		return new Promise((resolve, reject) => {
+			const meta = findMeta(args.id)
+			if (!meta) reject(defaults.name + ' - Could not get meta')
+			else resolve({ meta })
+		})
+	})
 
-			if (args.resource == 'catalog') {
-				getCatalog(local, args.id, catalog => {
-					if (catalog) {
-						let results = catalog
-						if (extra.search)
-							results = findChannel(extra.search, catalog)
-						if (results.length)
-							resolve({ metas: results })
-						else
-							reject(defaults.name + ' - No results for catalog request')
-					} else
-						reject(defaults.name + ' - Invalid catalog response')
-				})
-			} else if (args.resource == 'meta') {
-				const meta = findMeta(args.id)
-				if (!meta) reject(defaults.name + ' - Could not get meta')
-				else resolve({ meta })
-			} else if (args.resource == 'stream') {
-				const meta = findMeta(args.id)
-				if (!meta) reject(defaults.name + ' - Could not get meta for stream')
-				else {
-					const chanId = args.id.split('_')[2]
-					const url = 'http://' + persist.loginData.url + ':' + persist.loginData.port + '/live/' + config.username + '/' + config.password + '/' + chanId + '.m3u8'
-					resolve({ streams: [ { title: 'Stream', url } ] })
-				}
+	builder.defineStreamHandler(args => {
+		return new Promise((resolve, reject) => {
+			const meta = findMeta(args.id)
+			if (!meta) reject(defaults.name + ' - Could not get meta for stream')
+			else {
+				const chanId = args.id.split('_')[2]
+				const url = 'http://' + persist.getItem('loginData').url + ':' + persist.getItem('loginData').port + '/live/' + config.username + '/' + config.password + '/' + chanId + '.m3u8'
+				resolve({ streams: [ { title: 'Stream', url } ] })
 			}
 		})
-	}
+	})
+
+	const addonInterface = getInterface(builder)
+
+	return getRouter(addonInterface)
+
 }
+
+module.exports = retrieveRouter()
