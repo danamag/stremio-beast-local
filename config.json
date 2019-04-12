@@ -16,5 +16,10 @@
     "type": "string",
     "default": "",
     "required": true
+  },
+  "noFilters": {
+    "title": "Separate Catalogs",
+    "type": "boolean",
+    "default": false
   }
 }

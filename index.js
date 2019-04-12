@@ -14,7 +14,7 @@ const defaults = {
 	categories: [{"name":"UNITED STATES","id":"28"},{"name":"USA REGIONALS","id":"7"},{"name":"CANADA","id":"26"},{"name":"KIDS","id":"51"},{"name":"24/7","id":"8"},{"name":"SPORTS","id":"32"},{"name":"PPV SPORTS","id":"30"},{"name":"PPV MOVIES","id":"31"},{"name":"NHL","id":"34"},{"name":"MLB","id":"33"},{"name":"NBA","id":"40"},{"name":"MARCH MADNESS","id":"68"},{"name":"NASCAR","id":"66"},{"name":"SOCCER US/UK","id":"41"},{"name":"MUSIC","id":"18"},{"name":"UNITED KINGDOM","id":"27"},{"name":"LATINO","id":"71"},{"name":"SPANISH","id":"12"},{"name":"XXX","id":"11"},{"name":"PORTUGAL","id":"50"},{"name":"ITALY","id":"69"},{"name":"BRAZIL","id":"70"}]
 }
 
-
+let genres = []
 let categories = []
 let catalogs = []
 const channels = {}
@@ -47,15 +47,28 @@ setEndpoint(config.host || defaults.endpoint)
 
 function setCatalogs(cats) {
 	categories = cats
-	catalogs = []
-	cats.forEach(cat => {
-		catalogs.push({
-			id: defaults.prefix + 'cat_' + cat.id,
-			name: cat.name,
-			type: 'tv',
-			extra: [ { name: 'search' } ]
+	if (config.noFilters) {
+		catalogs = []
+		cats.forEach(cat => {
+			catalogs.push({
+				id: defaults.prefix + 'cat_' + cat.id,
+				name: cat.name,
+				type: 'tv',
+				extra: [ { name: 'search' } ]
+			})
 		})
-	})
+	} else {
+		genres = defaults.categories.map(el => { return el.name })
+		catalogs = [
+			{
+				id: defaults.prefix + '_cat',
+				name: defaults.name,
+				type: 'tv',
+				genres,
+				extra: [{ name: 'genre' }]
+			}
+		]
+	}
 	return true
 }
 
@@ -154,8 +167,24 @@ function findMeta(id) {
 	return meta
 }
 
-function getCatalog(reqId, cb) {
-	const id = reqId.replace(defaults.prefix + 'cat_', '')
+function getCatalog(args, cb) {
+	let id
+	if (config.noFilters) {
+		id = args.id.replace(defaults.prefix + 'cat_', '')
+	} else {
+		const genre = (args.extra || {}).genre
+		if (genre)
+			categories.some(el => {
+				if (el.name == genre) {
+					id = el.id
+					return true
+				}
+			})
+		if (!id) {
+			reject(defaults.name + ' - Could not get id for request')
+			return
+		}
+	}
 	if (channels[id] && channels[id].length)
 		cb(channels[id])
 	else {
@@ -241,7 +270,7 @@ async function retrieveRouter() {
 	builder.defineCatalogHandler(args => {
 		return new Promise((resolve, reject) => {
 			const extra = args.extra || {}
-			getCatalog(args.id, catalog => {
+			getCatalog(args, catalog => {
 				if (catalog) {
 					let results = catalog
 					if (extra.search)
@@ -283,3 +312,4 @@ async function retrieveRouter() {
 }
 
 module.exports = retrieveRouter()
+
