@@ -2,7 +2,7 @@
   "host": {
     "title": "Host",
     "type": "string",
-    "default": "http://twistedoffline.com/player/",
+    "default": "http://watch.beastiptv.tv/",
     "required": true
   },
   "username": {
