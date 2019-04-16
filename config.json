@@ -2,7 +2,7 @@
   "host": {
     "title": "Host",
     "type": "string",
-    "default": "http://watch.beastiptv.tv/",
+    "default": "http://twistedoffline.com/player/",
     "required": true
   },
   "username": {
@@ -17,9 +17,10 @@
     "default": "",
     "required": true
   },
-  "noFilters": {
-    "title": "Separate Catalogs",
-    "type": "boolean",
-    "default": false
+  "style": {
+    "title": "Display Style",
+    "type": "select",
+    "options": ["Channels", "Filters", "Catalogs"],
+    "default": "Channels"
   }
 }

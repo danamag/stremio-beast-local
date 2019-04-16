@@ -6,12 +6,12 @@ const needle = require('needle')
 const cheerio = require('cheerio')
 
 const defaults = {
-	name: 'Beast IPTV',
-	prefix: 'beasttv_',
-	origin: 'http://watch.beastiptv.tv',
-	endpoint: 'http://watch.beastiptv.tv/',
-	icon: 'https://thebeastip.tv/wp-content/uploads/2018/05/cropped-beast.png',
-	categories: [{"name":"UNITED STATES","id":"28"},{"name":"USA REGIONALS","id":"7"},{"name":"CANADA","id":"26"},{"name":"KIDS","id":"51"},{"name":"24/7","id":"8"},{"name":"SPORTS","id":"32"},{"name":"PPV SPORTS","id":"30"},{"name":"PPV MOVIES","id":"31"},{"name":"NHL","id":"34"},{"name":"MLB","id":"33"},{"name":"NBA","id":"40"},{"name":"MARCH MADNESS","id":"68"},{"name":"NASCAR","id":"66"},{"name":"SOCCER US/UK","id":"41"},{"name":"MUSIC","id":"18"},{"name":"UNITED KINGDOM","id":"27"},{"name":"LATINO","id":"71"},{"name":"SPANISH","id":"12"},{"name":"XXX","id":"11"},{"name":"PORTUGAL","id":"50"},{"name":"ITALY","id":"69"},{"name":"BRAZIL","id":"70"}]
+	name: 'Twisted IPTV',
+	prefix: 'twistedtv_',
+	origin: 'http://twistedoffline.com',
+	endpoint: 'http://twistedoffline.com/player/',
+	icon: 'https://s3-us-west-2.amazonaws.com/usedphotosna/81320118_614.jpg',
+	categories: [{"name":"* SUBJECT TO CHANGE *","id":"134"},{"name":"PPV | SPECIAL EVENTS","id":"24"},{"name":"24/7","id":"46"},{"name":"24/7 KIDS","id":"201"},{"name":"24/7 IN HOUSE","id":"227"},{"name":"USA CHANNELS","id":"37"},{"name":"USA 2 CHANNELS","id":"216"},{"name":"USA SD CHANNELS","id":"200"},{"name":"LOCAL CHANNELS","id":"214"},{"name":"CANADIAN CHANNELS","id":"239"},{"name":"INTERNATIONAL CHANNELS","id":"182"},{"name":"UK CHANNELS","id":"44"},{"name":"UK SD CHANNELS","id":"225"},{"name":"MARCH MADNESS","id":"238"},{"name":"MLB CHANNELS","id":"233"},{"name":"NASCAR","id":"229"},{"name":"NBA LEAGUE PASS","id":"88"},{"name":"NFL SUNDAY TICKET","id":"197"},{"name":"NHL HOCKEY","id":"56"},{"name":"ESPN SPORTS","id":"195"},{"name":"MUSIC CHOICE VIDEO","id":"140"},{"name":"PLUTO TV RADIO","id":"194"},{"name":"RADIO CHANNELS","id":"101"},{"name":"RELIGION CHANNELS","id":"219"},{"name":"WORLD WEBCAMS","id":"209"},{"name":"xxx CHANNELS xxx","id":"18"},{"name":"TEST CHANNELS","id":"85"}]
 }
 
 let genres = []
@@ -47,7 +47,7 @@ setEndpoint(config.host || defaults.endpoint)
 
 function setCatalogs(cats) {
 	categories = cats
-	if (config.noFilters) {
+	if (config.style == 'Catalogs') {
 		catalogs = []
 		cats.forEach(cat => {
 			catalogs.push({
@@ -57,7 +57,7 @@ function setCatalogs(cats) {
 				extra: [ { name: 'search' } ]
 			})
 		})
-	} else {
+	} else if (config.style == 'Filters') {
 		genres = defaults.categories.map(el => { return el.name })
 		catalogs = [
 			{
@@ -68,11 +68,38 @@ function setCatalogs(cats) {
 				extra: [{ name: 'genre' }]
 			}
 		]
+	} else if (config.style == 'Channels') {
+		catalogs = [
+			{
+				id: defaults.prefix + '_cat',
+				name: defaults.name,
+				type: 'tv',
+				extra: [{ name: 'search' }]
+			}
+		]
 	}
 	return true
 }
 
 setCatalogs(defaults.categories)
+
+function catToMeta(cat) {
+	return {
+		id: defaults.prefix + 'cat_' + cat.id,
+		name: cat.name,
+		logo: defaults.icon,
+		type: 'channel',
+		posterShape: 'square'
+	}
+}
+
+function catToVideo(cat) {
+	return {
+		id: cat.id,
+		title: cat.name,
+		thumbnail: cat.poster
+	}
+}
 
 let loggedIn = false
 
@@ -167,11 +194,11 @@ function findMeta(id) {
 	return meta
 }
 
-function getCatalog(args, cb) {
+function getCatalog(args, cb, force) {
 	let id
-	if (config.noFilters) {
+	if (config.style == 'Catalogs') {
 		id = args.id.replace(defaults.prefix + 'cat_', '')
-	} else {
+	} else if (config.style == 'Filters') {
 		const genre = (args.extra || {}).genre
 		if (genre)
 			categories.some(el => {
@@ -181,7 +208,15 @@ function getCatalog(args, cb) {
 				}
 			})
 		if (!id) {
-			reject(defaults.name + ' - Could not get id for request')
+			console.log(defaults.name + ' - Could not get id for request')
+			cb(false)
+			return
+		}
+	} else if (config.style == 'Channels') {
+		if (force) {
+			id = args.id.replace(defaults.prefix + 'cat_', '')
+		} else {
+			cb(categories.map(catToMeta))
 			return
 		}
 	}
@@ -248,7 +283,7 @@ function retrieveManifest() {
 			name: defaults.name,
 			description: 'IPTV Service - Requires Subscription',
 			resources: ['stream', 'meta', 'catalog'],
-			types: ['tv'],
+			types: ['tv', 'channel'],
 			idPrefixes: [defaults.prefix],
 			icon: defaults.icon,
 			catalogs
@@ -270,6 +305,9 @@ async function retrieveRouter() {
 	builder.defineCatalogHandler(args => {
 		return new Promise((resolve, reject) => {
 			const extra = args.extra || {}
+			if (config.style == 'Filters' && !extra.genre) {
+				return resolve({ metas: [] })
+			}
 			getCatalog(args, catalog => {
 				if (catalog) {
 					let results = catalog
@@ -287,21 +325,36 @@ async function retrieveRouter() {
 
 	builder.defineMetaHandler(args => {
 		return new Promise((resolve, reject) => {
-			const meta = findMeta(args.id)
-			if (!meta) reject(defaults.name + ' - Could not get meta')
-			else resolve({ meta })
+			if (config.style == 'Channels') {
+				let meta
+				categories.some(cat => {
+					if (cat.id == args.id.replace(defaults.prefix + 'cat_', '')) {
+						meta = catToMeta(cat)
+						return true
+					}
+				})
+				if (!meta) {
+					reject(defaults.name + ' - Could not get meta')
+					return
+				}
+				getCatalog(args, catalog => {
+					if ((catalog || []).length)
+						meta.videos = catalog.map(catToVideo)
+					resolve({ meta })
+				}, true)
+			} else {
+				const meta = findMeta(args.id)
+				if (!meta) reject(defaults.name + ' - Could not get meta')
+				else resolve({ meta })
+			}
 		})
 	})
 
 	builder.defineStreamHandler(args => {
 		return new Promise((resolve, reject) => {
-			const meta = findMeta(args.id)
-			if (!meta) reject(defaults.name + ' - Could not get meta for stream')
-			else {
-				const chanId = args.id.split('_')[2]
-				const url = 'http://' + persist.getItem('loginData').url + ':' + persist.getItem('loginData').port + '/live/' + config.username + '/' + config.password + '/' + chanId + '.m3u8'
-				resolve({ streams: [ { title: 'Stream', url } ] })
-			}
+			const chanId = args.id.split('_')[2]
+			const url = 'http://' + persist.getItem('loginData').url + ':' + persist.getItem('loginData').port + '/live/' + config.username + '/' + config.password + '/' + chanId + '.m3u8'
+			resolve({ streams: [ { title: 'Stream', url } ] })
 		})
 	})
 
@@ -312,4 +365,3 @@ async function retrieveRouter() {
 }
 
 module.exports = retrieveRouter()
-
