@@ -6,12 +6,12 @@ const needle = require('needle')
 const cheerio = require('cheerio')
 
 const defaults = {
-	name: 'Twisted IPTV',
-	prefix: 'twistedtv_',
-	origin: 'http://twistedoffline.com',
-	endpoint: 'http://twistedoffline.com/player/',
-	icon: 'https://s3-us-west-2.amazonaws.com/usedphotosna/81320118_614.jpg',
-	categories: [{"name":"* SUBJECT TO CHANGE *","id":"134"},{"name":"PPV | SPECIAL EVENTS","id":"24"},{"name":"24/7","id":"46"},{"name":"24/7 KIDS","id":"201"},{"name":"24/7 IN HOUSE","id":"227"},{"name":"USA CHANNELS","id":"37"},{"name":"USA 2 CHANNELS","id":"216"},{"name":"USA SD CHANNELS","id":"200"},{"name":"LOCAL CHANNELS","id":"214"},{"name":"CANADIAN CHANNELS","id":"239"},{"name":"INTERNATIONAL CHANNELS","id":"182"},{"name":"UK CHANNELS","id":"44"},{"name":"UK SD CHANNELS","id":"225"},{"name":"MARCH MADNESS","id":"238"},{"name":"MLB CHANNELS","id":"233"},{"name":"NASCAR","id":"229"},{"name":"NBA LEAGUE PASS","id":"88"},{"name":"NFL SUNDAY TICKET","id":"197"},{"name":"NHL HOCKEY","id":"56"},{"name":"ESPN SPORTS","id":"195"},{"name":"MUSIC CHOICE VIDEO","id":"140"},{"name":"PLUTO TV RADIO","id":"194"},{"name":"RADIO CHANNELS","id":"101"},{"name":"RELIGION CHANNELS","id":"219"},{"name":"WORLD WEBCAMS","id":"209"},{"name":"xxx CHANNELS xxx","id":"18"},{"name":"TEST CHANNELS","id":"85"}]
+	name: 'Beast IPTV',
+	prefix: 'beasttv_',
+	origin: 'http://watch.beastiptv.tv',
+	endpoint: 'http://watch.beastiptv.tv/',
+	icon: 'https://thebeastip.tv/wp-content/uploads/2018/05/cropped-beast.png',
+	categories: [{"name":"UNITED STATES","id":"28"},{"name":"USA REGIONALS","id":"7"},{"name":"CANADA","id":"26"},{"name":"KIDS","id":"51"},{"name":"24/7","id":"8"},{"name":"SPORTS","id":"32"},{"name":"PPV SPORTS","id":"30"},{"name":"PPV MOVIES","id":"31"},{"name":"NHL","id":"34"},{"name":"MLB","id":"33"},{"name":"NBA","id":"40"},{"name":"MARCH MADNESS","id":"68"},{"name":"NASCAR","id":"66"},{"name":"SOCCER US/UK","id":"41"},{"name":"MUSIC","id":"18"},{"name":"UNITED KINGDOM","id":"27"},{"name":"LATINO","id":"71"},{"name":"SPANISH","id":"12"},{"name":"XXX","id":"11"},{"name":"PORTUGAL","id":"50"},{"name":"ITALY","id":"69"},{"name":"BRAZIL","id":"70"}]
 }
 
 let genres = []
